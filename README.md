@@ -11,6 +11,15 @@ Mirage is a stateful API mock server for integration testing.
 Define a partner's API as a YAML file, run `mirage start`, and you get a fully functional
 mock server — no code changes required to add new partners or endpoints.
 
+## Why Mirage?
+
+Tools like WireMock, Postman, and Mockoon mock individual HTTP responses. Real partner APIs
+don't work that way: they require a specific call sequence, return `202 Accepted` before data
+is available, and expect you to poll or wait before fetching a result. Testing against a
+stateless stub hides these interaction bugs until you hit production. Mirage models the full
+interaction sequence — submit, poll, fetch — so your integration tests reflect what actually
+happens when your code talks to a real partner API.
+
 ## How it works
 
 - **Partner definitions** live in `partners/<name>/partner.yaml`. Each file declares the
@@ -28,6 +37,33 @@ mock server — no code changes required to add new partners or endpoints.
 - **Admin API** is always available at `/mirage/admin/` for uploading payloads and
   inspecting sessions.
 
+### Interaction sequence (poll pattern)
+
+```
+Test Harness                       Mirage
+     |                               |
+     |  POST /admin/.../payload      |   (upload the response payload)
+     |------------------------------>|
+     |  200 OK                       |
+     |<------------------------------|
+     |                               |
+     |  POST /partner/resource       |   step 1 — submit
+     |------------------------------>|
+     |  202 Accepted                 |
+     |  Location: .../resource/uuid  |
+     |<------------------------------|
+     |                               |
+     |  HEAD /partner/resource/uuid  |   step 2 — poll for readiness
+     |------------------------------>|
+     |  201  Status: COMPLETED       |
+     |<------------------------------|
+     |                               |
+     |  GET  /partner/resource/uuid  |   step 3 — fetch result
+     |------------------------------>|
+     |  200  { ...payload }          |
+     |<------------------------------|
+```
+
 ## Quick start
 
 **With Docker (recommended):**
@@ -38,9 +74,25 @@ docker compose up
 ```
 
 **Without Docker:**
+
+Requires Python 3.11 or later.
+
 ```bash
+git clone https://github.com/edu2105/mirage.git
+cd mirage
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e .
 mirage start
+```
+
+Expected output:
+```
+Starting Mirage on http://127.0.0.1:8000
+INFO:     Started server process [12345]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
 ```
 
 See what endpoints are available (no server needed):
@@ -229,6 +281,44 @@ environment:
   MIRAGE_ADMIN_KEY: "your-secret-key"
 ```
 
+## Deploy to the cloud
+
+Always set `MIRAGE_ADMIN_KEY` when deploying outside localhost.
+
+**Railway**
+
+Create a project, attach a volume mounted at `/app/data`, and set `PARTNERS_DIR` if
+your partner YAMLs are not committed to the repo. Deploy with:
+
+```bash
+railway up
+```
+
+Set `MIRAGE_ADMIN_KEY` in the Railway environment variables dashboard.
+If you store partners in the repo, the `partners/` directory is included in the deploy
+automatically. For a persistent SQLite database, mount a volume at `/app/data` and point
+Mirage at it with `--db /app/data/mirage.db` via the start command.
+
+**Render**
+
+Create a new Web Service using the Docker runtime. Add a persistent disk mounted at
+`/app/data`. Set the start command to `mirage start --db /app/data/mirage.db --host 0.0.0.0`.
+Set `MIRAGE_ADMIN_KEY` in the environment variables panel. Render rebuilds the image on
+each push; partners committed to the repo are available immediately after deploy.
+
+**Any Linux VM (EC2, DigitalOcean, etc.)**
+
+```bash
+git clone https://github.com/edu2105/mirage.git
+cd mirage
+# Set your admin key in docker-compose.yml or as an env var, then:
+MIRAGE_ADMIN_KEY=your-secret-key docker compose up -d
+```
+
+Put Nginx in front to terminate TLS and proxy to `127.0.0.1:8000`. The `partners/` and
+`data/` directories are volume-mounted, so adding a partner or backing up state requires
+no container access.
+
 ## Adding a new partner
 
 Create a directory under `partners/` with a `partner.yaml` file — no code changes required.
@@ -263,3 +353,33 @@ mirage/
 │       └── partner.yaml
 └── tests/
 ```
+
+## Limitations & Roadmap
+
+- `push` pattern is not yet implemented — Mirage cannot proactively deliver payloads to a callback URL.
+- No native HTTPS support — use a reverse proxy (Nginx, Caddy) to terminate TLS.
+- No web UI — all admin interactions are via the REST API or CLI.
+- XML response bodies are not supported — responses are always JSON.
+- No built-in mTLS support.
+- Single-node only — the SQLite session store is not shared across instances.
+
+## Contributing
+
+**Run the test suite:**
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+**Add a new pattern:**
+Patterns live in `mirage/engine/patterns/`. Each pattern is a module that registers one or
+more FastAPI route handlers given an `EndpointDef`. Look at `fetch.py` or `poll.py` for the
+interface — the router calls `register(app, partner, datapoint, endpoint, store)` for each
+endpoint whose pattern matches. Add your module there and wire it into `router.py`.
+
+**Add a new partner:**
+No code required — write a `partner.yaml` under `partners/<name>/`. The full schema and
+field reference is in `partners/README.md`.
+
+**Looking for where to start?**
+Open issues are tracked at [github.com/edu2105/mirage/issues](https://github.com/edu2105/mirage/issues).
