@@ -1,0 +1,107 @@
+"""Tests for the app factory."""
+
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+from mirage.api.server import create_app
+
+PARTNERS_DIR = Path(__file__).parent.parent / "partners"
+
+
+@pytest.fixture
+def client(tmp_path):
+    app = create_app(partners_dir=PARTNERS_DIR, db_path=tmp_path / "test.db")
+    with TestClient(app) as c:
+        yield c
+
+
+# ---------------------------------------------------------------------------
+# App boots correctly
+# ---------------------------------------------------------------------------
+
+
+def test_app_starts_and_lists_partners(client):
+    r = client.get("/mirage/admin/partners")
+    assert r.status_code == 200
+    assert r.json()[0]["partner"] == "ohip"
+
+
+def test_app_has_openapi_schema(client):
+    r = client.get("/openapi.json")
+    assert r.status_code == 200
+    assert r.json()["info"]["title"] == "Mirage"
+
+
+# ---------------------------------------------------------------------------
+# Full OHIP flow through create_app (integration smoke test)
+# ---------------------------------------------------------------------------
+
+
+def test_full_global_flow(client):
+    # Upload payload
+    client.post(
+        "/mirage/admin/ohip/reservation/payload",
+        json={"reservationId": "GLOBAL001", "status": "CONFIRMED"},
+    )
+
+    # OAuth token
+    token_r = client.post("/oauth/token")
+    assert token_r.status_code == 200
+    assert token_r.json()["token_type"] == "Bearer"
+
+    # Poll step 1
+    r1 = client.post("/ohip/reservations")
+    assert r1.status_code == 202
+    uuid = r1.headers["Location"].split("/")[-1]
+
+    # Poll step 2
+    r2 = client.head(f"/ohip/reservations/{uuid}")
+    assert r2.status_code == 201
+    assert r2.headers["Status"] == "COMPLETED"
+
+    # Poll step 3
+    r3 = client.get(f"/ohip/reservations/{uuid}")
+    assert r3.status_code == 200
+    assert r3.json() == {"reservationId": "GLOBAL001", "status": "CONFIRMED"}
+
+
+def test_full_session_flow(client):
+    # Upload session payload
+    session_id = client.post(
+        "/mirage/admin/ohip/reservation/payload/session",
+        json={"reservationId": "SES001"},
+    ).json()["session_id"]
+
+    # Poll step 1 with session
+    r1 = client.post("/ohip/reservations", headers={"X-Mirage-Session": session_id})
+    uuid = r1.headers["Location"].split("/")[-1]
+
+    # Poll step 3 with session
+    r3 = client.get(f"/ohip/reservations/{uuid}", headers={"X-Mirage-Session": session_id})
+    assert r3.status_code == 200
+    assert r3.json() == {"reservationId": "SES001"}
+
+    # Same UUID without session header → no global payload → 404
+    r_no_session = client.get(f"/ohip/reservations/{uuid}")
+    assert r_no_session.status_code == 404
+
+
+def test_multiple_app_instances_do_not_share_state(tmp_path):
+    """Each create_app() call gets its own isolated store."""
+    app1 = create_app(partners_dir=PARTNERS_DIR, db_path=tmp_path / "a.db")
+    app2 = create_app(partners_dir=PARTNERS_DIR, db_path=tmp_path / "b.db")
+
+    with TestClient(app1) as c1, TestClient(app2) as c2:
+        c1.post("/mirage/admin/ohip/reservation/payload", json={"src": "app1"})
+
+        # app2 has no payload
+        r1 = c1.post("/ohip/reservations")
+        r2 = c2.post("/ohip/reservations")
+
+        uuid1 = r1.headers["Location"].split("/")[-1]
+        uuid2 = r2.headers["Location"].split("/")[-1]
+
+        assert c1.get(f"/ohip/reservations/{uuid1}").status_code == 200
+        assert c2.get(f"/ohip/reservations/{uuid2}").status_code == 404
