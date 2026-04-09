@@ -1,5 +1,9 @@
 # Mirage
 
+<p align="center">
+  <img src="assets/logo.svg" alt="Mirage logo" width="320"/>
+</p>
+
 [![CI](https://github.com/edu2105/mirage/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/edu2105/mirage/actions/workflows/ci.yml)
 
 Mirage is a stateful API mock server for integration testing.
