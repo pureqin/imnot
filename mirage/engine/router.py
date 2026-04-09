@@ -35,8 +35,15 @@ def register_routes(
     app: FastAPI,
     partners: list[PartnerDef],
     store: SessionStore,
+    admin_key: str | None = None,
 ) -> None:
-    """Register all routes on *app* derived from *partners*, plus fixed infra routes."""
+    """Register all routes on *app* derived from *partners*, plus fixed infra routes.
+
+    If *admin_key* is provided, all ``/mirage/admin/*`` requests must include
+    ``Authorization: Bearer <admin_key>`` or receive a 401 response.
+    """
+    if admin_key:
+        _register_admin_auth_middleware(app, admin_key)
     _register_infra_routes(app, partners, store)
     for partner in partners:
         for datapoint in partner.datapoints:
@@ -47,6 +54,33 @@ def register_routes(
         len(partners),
         [p.partner for p in partners],
     )
+
+
+# ---------------------------------------------------------------------------
+# Admin auth middleware
+# ---------------------------------------------------------------------------
+
+
+def _register_admin_auth_middleware(app: FastAPI, admin_key: str) -> None:
+    """Add middleware that enforces Bearer token auth on all /mirage/admin/* paths."""
+
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import Response
+
+    class AdminAuthMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+            if request.url.path.startswith("/mirage/admin/"):
+                auth = request.headers.get("Authorization", "")
+                if auth != f"Bearer {admin_key}":
+                    return Response(
+                        content='{"detail":"Unauthorized"}',
+                        status_code=401,
+                        media_type="application/json",
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+            return await call_next(request)
+
+    app.add_middleware(AdminAuthMiddleware)
 
 
 # ---------------------------------------------------------------------------

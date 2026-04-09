@@ -105,3 +105,47 @@ def test_multiple_app_instances_do_not_share_state(tmp_path):
 
         assert c1.get(f"/staylink/reservations/{uuid1}").status_code == 200
         assert c2.get(f"/staylink/reservations/{uuid2}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Admin key authentication
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def authed_client(tmp_path):
+    app = create_app(partners_dir=PARTNERS_DIR, db_path=tmp_path / "test.db", admin_key="secret")
+    with TestClient(app) as c:
+        yield c
+
+
+def test_admin_open_when_no_key_set(client):
+    """Without admin_key, all admin endpoints are open."""
+    r = client.get("/mirage/admin/partners")
+    assert r.status_code == 200
+
+
+def test_admin_requires_auth_when_key_set(authed_client):
+    r = authed_client.get("/mirage/admin/partners")
+    assert r.status_code == 401
+
+
+def test_admin_accepts_correct_bearer_token(authed_client):
+    r = authed_client.get("/mirage/admin/partners", headers={"Authorization": "Bearer secret"})
+    assert r.status_code == 200
+
+
+def test_admin_rejects_wrong_token(authed_client):
+    r = authed_client.get("/mirage/admin/partners", headers={"Authorization": "Bearer wrong"})
+    assert r.status_code == 401
+
+
+def test_admin_rejects_missing_bearer_prefix(authed_client):
+    r = authed_client.get("/mirage/admin/partners", headers={"Authorization": "secret"})
+    assert r.status_code == 401
+
+
+def test_consumer_endpoints_not_affected_by_admin_key(authed_client):
+    """Consumer routes (non-admin) must remain accessible without auth."""
+    r = authed_client.post("/oauth/token")
+    assert r.status_code == 200

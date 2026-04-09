@@ -53,11 +53,19 @@ def cli() -> None:
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host.")
 @click.option("--port", default=8000, show_default=True, help="Bind port.")
 @click.option("--reload", is_flag=True, default=False, help="Enable auto-reload (development only).")
-def start(partners_dir: str, db: str, host: str, port: int, reload: bool) -> None:
+@click.option(
+    "--admin-key",
+    default=None,
+    envvar="MIRAGE_ADMIN_KEY",
+    help="Bearer token required for all /mirage/admin/* endpoints. "
+         "Also readable from MIRAGE_ADMIN_KEY env var. Omit for open access (local dev only).",
+)
+def start(partners_dir: str, db: str, host: str, port: int, reload: bool, admin_key: str | None) -> None:
     """Load partner definitions and start the mock server."""
     app = create_app(
         partners_dir=Path(partners_dir),
         db_path=Path(db),
+        admin_key=admin_key or None,
     )
     click.echo(f"Starting Mirage on http://{host}:{port}")
     uvicorn.run(app, host=host, port=port, reload=reload)

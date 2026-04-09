@@ -31,11 +31,15 @@ DEFAULT_DB_PATH = Path("mirage.db")
 def create_app(
     partners_dir: Path = DEFAULT_PARTNERS_DIR,
     db_path: Path = DEFAULT_DB_PATH,
+    admin_key: str | None = None,
 ) -> FastAPI:
     """Build and return a fully configured FastAPI application.
 
     A fresh SessionStore and partner list are created on every call, so tests
     can call this multiple times without shared state.
+
+    If *admin_key* is provided, all ``/mirage/admin/*`` endpoints require
+    ``Authorization: Bearer <admin_key>``.
     """
     store = SessionStore(db_path=db_path)
     partners = load_partners(partners_dir)
@@ -44,6 +48,8 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         store.init()
         logger.info("Mirage starting — %d partner(s) loaded", len(partners))
+        if admin_key:
+            logger.info("Admin endpoints protected by Bearer token auth")
         yield
         store.close()
         logger.info("Mirage shut down")
@@ -55,5 +61,5 @@ def create_app(
         lifespan=lifespan,
     )
 
-    register_routes(app, partners, store)
+    register_routes(app, partners, store, admin_key=admin_key)
     return app

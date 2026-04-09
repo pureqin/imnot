@@ -13,4 +13,6 @@ RUN mkdir -p /app/partners /app/data
 
 EXPOSE 8000
 
+# MIRAGE_ADMIN_KEY is read automatically by the --admin-key option via envvar.
+# Set it in docker-compose.yml or pass -e MIRAGE_ADMIN_KEY=<secret> at runtime.
 ENTRYPOINT ["mirage", "start", "--host", "0.0.0.0", "--db", "/app/data/mirage.db", "--partners-dir", "/app/partners"]
