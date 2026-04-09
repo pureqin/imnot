@@ -243,6 +243,12 @@ class SessionStore:
             )
             return [dict(row) for row in cur.fetchall()]
 
+    def clear_sessions(self) -> int:
+        """Delete all sessions. Returns the number of rows deleted."""
+        with self._cursor() as cur:
+            cur.execute("DELETE FROM sessions")
+            return cur.rowcount
+
 
 # ---------------------------------------------------------------------------
 # Helpers

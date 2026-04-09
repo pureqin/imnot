@@ -25,7 +25,7 @@ def client(tmp_path):
 def test_app_starts_and_lists_partners(client):
     r = client.get("/mirage/admin/partners")
     assert r.status_code == 200
-    assert r.json()[0]["partner"] == "ohip"
+    assert any(p["partner"] == "ohip" for p in r.json())
 
 
 def test_app_has_openapi_schema(client):

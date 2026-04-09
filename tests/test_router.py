@@ -43,10 +43,10 @@ def test_list_partners(client):
     r = client.get("/mirage/admin/partners")
     assert r.status_code == 200
     body = r.json()
-    assert len(body) == 1
-    assert body[0]["partner"] == "ohip"
-    assert "reservation" in body[0]["datapoints"]
-    assert "token" in body[0]["datapoints"]
+    ohip = next((p for p in body if p["partner"] == "ohip"), None)
+    assert ohip is not None
+    assert "reservation" in ohip["datapoints"]
+    assert "token" in ohip["datapoints"]
 
 
 def test_list_sessions_empty(client):

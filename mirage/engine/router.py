@@ -21,8 +21,10 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from mirage.engine.patterns.fetch import make_fetch_handler
 from mirage.engine.patterns.oauth import make_oauth_handler
 from mirage.engine.patterns.poll import make_poll_handlers
+from mirage.engine.patterns.static import make_static_handler
 from mirage.engine.session_store import SessionStore
 from mirage.loader.yaml_loader import DatapointDef, EndpointDef, PartnerDef
 
@@ -63,6 +65,18 @@ def _register_consumer_routes(
             handler = make_oauth_handler(endpoint)
             app.add_api_route(endpoint.path, handler, methods=[endpoint.method])
             logger.debug("Registered oauth route %s %s", endpoint.method, endpoint.path)
+
+    elif datapoint.pattern == "static":
+        for endpoint in datapoint.endpoints:
+            handler = make_static_handler(endpoint)
+            app.add_api_route(endpoint.path, handler, methods=[endpoint.method])
+            logger.debug("Registered static route %s %s", endpoint.method, endpoint.path)
+
+    elif datapoint.pattern == "fetch":
+        for endpoint in datapoint.endpoints:
+            handler = make_fetch_handler(partner.partner, datapoint, endpoint, store)
+            app.add_api_route(endpoint.path, handler, methods=[endpoint.method])
+            logger.debug("Registered fetch route %s %s", endpoint.method, endpoint.path)
 
     elif datapoint.pattern == "poll":
         step_map: dict[int, EndpointDef] = {ep.step: ep for ep in datapoint.endpoints}

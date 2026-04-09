@@ -21,16 +21,14 @@ PARTNERS_DIR = Path(__file__).parent.parent / "partners"
 
 def test_load_ohip_partner():
     partners = load_partners(PARTNERS_DIR)
-    assert len(partners) == 1
-
-    ohip = partners[0]
+    ohip = next((p for p in partners if p.partner == "ohip"), None)
+    assert ohip is not None
     assert isinstance(ohip, PartnerDef)
-    assert ohip.partner == "ohip"
     assert len(ohip.datapoints) == 2
 
 
 def test_ohip_token_datapoint():
-    ohip = load_partners(PARTNERS_DIR)[0]
+    ohip = next(p for p in load_partners(PARTNERS_DIR) if p.partner == "ohip")
     token = next(dp for dp in ohip.datapoints if dp.name == "token")
 
     assert isinstance(token, DatapointDef)
@@ -47,7 +45,7 @@ def test_ohip_token_datapoint():
 
 
 def test_ohip_reservation_datapoint():
-    ohip = load_partners(PARTNERS_DIR)[0]
+    ohip = next(p for p in load_partners(PARTNERS_DIR) if p.partner == "ohip")
     reservation = next(dp for dp in ohip.datapoints if dp.name == "reservation")
 
     assert reservation.pattern == "poll"
