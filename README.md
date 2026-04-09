@@ -175,11 +175,32 @@ Fixed infra endpoints:
 | `GET` | `/mirage/admin/partners` | List all loaded partners and their datapoints |
 | `GET` | `/mirage/admin/sessions` | List all active sessions |
 
+### Securing admin endpoints
+
+By default admin endpoints are open — suitable for local development only.
+When deploying on a shared network, protect them with a Bearer token:
+
+```bash
+# via environment variable (recommended)
+MIRAGE_ADMIN_KEY=your-secret-key mirage start
+
+# or as a CLI flag
+mirage start --admin-key your-secret-key
+```
+
+All `/mirage/admin/*` requests then require:
+```
+Authorization: Bearer your-secret-key
+```
+
+Consumer endpoints (`/oauth/token`, partner routes, etc.) are never affected.
+Set `MIRAGE_ADMIN_KEY` in `docker-compose.yml` for Docker deployments.
+
 ## CLI
 
 | Command | Description |
 |---------|-------------|
-| `mirage start` | Load all partner YAMLs and start the server |
+| `mirage start` | Load all partner YAMLs and start the server (`--admin-key` / `MIRAGE_ADMIN_KEY` to protect admin endpoints) |
 | `mirage status` | Show active sessions in the store |
 | `mirage routes` | List all consumer and admin endpoints per partner (no server needed) |
 | `mirage payload get <partner> <datapoint>` | Print the current global payload |
@@ -196,6 +217,16 @@ docker compose up                   # start
 docker compose restart              # reload after adding a partner YAML
 docker compose down                 # stop (data persists in ./data/)
 docker compose down -v              # stop and wipe all state
+```
+
+The container binds to `127.0.0.1` by default. To expose it on the network,
+update `docker-compose.yml` and set an admin key:
+
+```yaml
+ports:
+  - "0.0.0.0:8000:8000"
+environment:
+  MIRAGE_ADMIN_KEY: "your-secret-key"
 ```
 
 ## Adding a new partner
