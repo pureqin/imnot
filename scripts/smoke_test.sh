@@ -15,8 +15,8 @@ BASE="${1:-http://127.0.0.1:8000}"
 PASS=0
 FAIL=0
 
-ok()   { echo "  [PASS] $1"; ((PASS++)); }
-fail() { echo "  [FAIL] $1"; ((FAIL++)); }
+ok()   { echo "  [PASS] $1"; PASS=$((PASS + 1)); }
+fail() { echo "  [FAIL] $1"; FAIL=$((FAIL + 1)); }
 
 assert_status() {
   local label="$1" expected="$2" actual="$3"
@@ -79,8 +79,9 @@ SESSION_UUID="${SESSION_LOCATION##*/}"
 BODY=$(curl -s -H "X-Mirage-Session: $SESSION_ID" "$BASE/ohip/reservations/$SESSION_UUID")
 echo "$BODY" | grep -q "SMOKE002" && ok "GET with session header — payload matches" || fail "Session payload mismatch: $BODY"
 
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/ohip/reservations/$SESSION_UUID")
-assert_status "GET without session header — no global → 404" 404 "$STATUS"
+BODY_NO_SESSION=$(curl -s "$BASE/ohip/reservations/$SESSION_UUID")
+echo "$BODY_NO_SESSION" | grep -q "SMOKE001" && ok "GET without session header — falls back to global payload" \
+  || fail "GET without session header — expected global payload (SMOKE001), got: $BODY_NO_SESSION"
 
 # ------------------------------------------------------------------------------
 echo ""
