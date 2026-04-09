@@ -1,0 +1,227 @@
+"""
+Session store: SQLite-backed persistence for payloads and sessions.
+
+Responsibilities:
+- Initialize and migrate the SQLite schema on startup.
+- Store and retrieve global payloads keyed by (partner, datapoint).
+- Create sessions and store per-session payloads keyed by (session_id, partner, datapoint).
+- Look up the correct payload for an incoming request given an optional session_id.
+- Map poll UUIDs to their originating session so step 3 can resolve the right payload.
+- List active sessions for the admin API.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import sqlite3
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any, Generator
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_DB_PATH = Path("mirage.db")
+
+
+# ---------------------------------------------------------------------------
+# Schema
+# ---------------------------------------------------------------------------
+
+_DDL = """
+CREATE TABLE IF NOT EXISTS global_payloads (
+    partner     TEXT NOT NULL,
+    datapoint   TEXT NOT NULL,
+    payload     TEXT NOT NULL,           -- JSON blob
+    updated_at  TEXT NOT NULL,
+    PRIMARY KEY (partner, datapoint)
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id  TEXT PRIMARY KEY,
+    partner     TEXT NOT NULL,
+    datapoint   TEXT NOT NULL,
+    payload     TEXT NOT NULL,           -- JSON blob
+    created_at  TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS poll_requests (
+    uuid        TEXT PRIMARY KEY,
+    partner     TEXT NOT NULL,
+    datapoint   TEXT NOT NULL,
+    session_id  TEXT,                    -- NULL for global-mode requests
+    created_at  TEXT NOT NULL
+);
+"""
+
+
+# ---------------------------------------------------------------------------
+# Store
+# ---------------------------------------------------------------------------
+
+
+class SessionStore:
+    """Thin synchronous wrapper around a SQLite database.
+
+    All methods are synchronous and safe to call from FastAPI route handlers
+    via `run_in_executor` if async is needed, or directly inside sync routes.
+    """
+
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH) -> None:
+        self.db_path = db_path
+        self._conn: sqlite3.Connection | None = None
+
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
+    def init(self) -> None:
+        """Open the database connection and create tables if they don't exist."""
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._conn.executescript(_DDL)
+        self._conn.commit()
+        logger.info("Session store initialised at %s", self.db_path)
+
+    def close(self) -> None:
+        if self._conn:
+            self._conn.close()
+            self._conn = None
+
+    @contextmanager
+    def _cursor(self) -> Generator[sqlite3.Cursor, None, None]:
+        assert self._conn is not None, "SessionStore.init() must be called before use"
+        cur = self._conn.cursor()
+        try:
+            yield cur
+            self._conn.commit()
+        except Exception:
+            self._conn.rollback()
+            raise
+        finally:
+            cur.close()
+
+    # ------------------------------------------------------------------
+    # Global payloads
+    # ------------------------------------------------------------------
+
+    def store_global_payload(self, partner: str, datapoint: str, payload: dict[str, Any]) -> None:
+        """Upsert a global payload for (partner, datapoint). Last write wins."""
+        now = _now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO global_payloads (partner, datapoint, payload, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (partner, datapoint) DO UPDATE
+                    SET payload = excluded.payload,
+                        updated_at = excluded.updated_at
+                """,
+                (partner, datapoint, json.dumps(payload), now),
+            )
+        logger.debug("Stored global payload for %s/%s", partner, datapoint)
+
+    # ------------------------------------------------------------------
+    # Session payloads
+    # ------------------------------------------------------------------
+
+    def store_session_payload(
+        self, partner: str, datapoint: str, payload: dict[str, Any]
+    ) -> str:
+        """Create a new session with an isolated payload. Returns the session_id."""
+        session_id = _new_id()
+        now = _now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO sessions (session_id, partner, datapoint, payload, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (session_id, partner, datapoint, json.dumps(payload), now),
+            )
+        logger.debug("Stored session payload for %s/%s → session %s", partner, datapoint, session_id)
+        return session_id
+
+    # ------------------------------------------------------------------
+    # Poll request tracking
+    # ------------------------------------------------------------------
+
+    def register_poll_request(
+        self, partner: str, datapoint: str, session_id: str | None
+    ) -> str:
+        """Record a new poll request (step 1). Returns the generated UUID."""
+        poll_uuid = _new_id()
+        now = _now()
+        with self._cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO poll_requests (uuid, partner, datapoint, session_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (poll_uuid, partner, datapoint, session_id, now),
+            )
+        logger.debug("Registered poll request %s for %s/%s", poll_uuid, partner, datapoint)
+        return poll_uuid
+
+    def get_poll_request(self, poll_uuid: str) -> sqlite3.Row | None:
+        """Return the poll_requests row for a UUID, or None if not found."""
+        with self._cursor() as cur:
+            cur.execute("SELECT * FROM poll_requests WHERE uuid = ?", (poll_uuid,))
+            return cur.fetchone()
+
+    # ------------------------------------------------------------------
+    # Payload resolution
+    # ------------------------------------------------------------------
+
+    def resolve_payload(
+        self, partner: str, datapoint: str, session_id: str | None
+    ) -> dict[str, Any] | None:
+        """Return the payload for the given (partner, datapoint), respecting session priority.
+
+        Resolution order:
+        1. If session_id is provided → look up session payload → return None if not found.
+        2. If no session_id → look up global payload → return None if not found.
+        """
+        with self._cursor() as cur:
+            if session_id:
+                cur.execute(
+                    "SELECT payload FROM sessions WHERE session_id = ? AND partner = ? AND datapoint = ?",
+                    (session_id, partner, datapoint),
+                )
+            else:
+                cur.execute(
+                    "SELECT payload FROM global_payloads WHERE partner = ? AND datapoint = ?",
+                    (partner, datapoint),
+                )
+            row = cur.fetchone()
+
+        if row is None:
+            return None
+        return json.loads(row["payload"])
+
+    # ------------------------------------------------------------------
+    # Admin queries
+    # ------------------------------------------------------------------
+
+    def list_sessions(self) -> list[dict[str, Any]]:
+        """Return all sessions ordered by creation time descending."""
+        with self._cursor() as cur:
+            cur.execute(
+                "SELECT session_id, partner, datapoint, created_at FROM sessions ORDER BY created_at DESC"
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _new_id() -> str:
+    return str(uuid.uuid4())

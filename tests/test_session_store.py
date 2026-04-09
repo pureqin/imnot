@@ -1,0 +1,123 @@
+"""Tests for the session store."""
+
+import pytest
+
+from mirage.engine.session_store import SessionStore
+
+
+@pytest.fixture
+def store(tmp_path):
+    s = SessionStore(db_path=tmp_path / "test.db")
+    s.init()
+    yield s
+    s.close()
+
+
+# ---------------------------------------------------------------------------
+# Global payloads
+# ---------------------------------------------------------------------------
+
+
+def test_store_and_resolve_global_payload(store):
+    payload = {"reservationId": "abc123", "status": "CONFIRMED"}
+    store.store_global_payload("ohip", "reservation", payload)
+
+    result = store.resolve_payload("ohip", "reservation", session_id=None)
+    assert result == payload
+
+
+def test_global_payload_last_write_wins(store):
+    store.store_global_payload("ohip", "reservation", {"v": 1})
+    store.store_global_payload("ohip", "reservation", {"v": 2})
+
+    result = store.resolve_payload("ohip", "reservation", session_id=None)
+    assert result == {"v": 2}
+
+
+def test_global_payload_not_found_returns_none(store):
+    result = store.resolve_payload("ohip", "reservation", session_id=None)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Session payloads
+# ---------------------------------------------------------------------------
+
+
+def test_store_and_resolve_session_payload(store):
+    payload = {"reservationId": "xyz", "status": "PENDING"}
+    session_id = store.store_session_payload("ohip", "reservation", payload)
+
+    assert isinstance(session_id, str) and len(session_id) == 36  # UUID
+
+    result = store.resolve_payload("ohip", "reservation", session_id=session_id)
+    assert result == payload
+
+
+def test_session_payload_not_found_returns_none(store):
+    result = store.resolve_payload("ohip", "reservation", session_id="nonexistent")
+    assert result is None
+
+
+def test_sessions_are_isolated(store):
+    s1 = store.store_session_payload("ohip", "reservation", {"user": "alice"})
+    s2 = store.store_session_payload("ohip", "reservation", {"user": "bob"})
+
+    assert store.resolve_payload("ohip", "reservation", s1) == {"user": "alice"}
+    assert store.resolve_payload("ohip", "reservation", s2) == {"user": "bob"}
+
+
+def test_session_takes_priority_over_global(store):
+    store.store_global_payload("ohip", "reservation", {"source": "global"})
+    session_id = store.store_session_payload("ohip", "reservation", {"source": "session"})
+
+    result = store.resolve_payload("ohip", "reservation", session_id=session_id)
+    assert result == {"source": "session"}
+
+
+# ---------------------------------------------------------------------------
+# Poll request tracking
+# ---------------------------------------------------------------------------
+
+
+def test_register_and_get_poll_request(store):
+    poll_uuid = store.register_poll_request("ohip", "reservation", session_id=None)
+
+    assert isinstance(poll_uuid, str) and len(poll_uuid) == 36
+
+    row = store.get_poll_request(poll_uuid)
+    assert row is not None
+    assert row["partner"] == "ohip"
+    assert row["datapoint"] == "reservation"
+    assert row["session_id"] is None
+
+
+def test_poll_request_with_session(store):
+    session_id = store.store_session_payload("ohip", "reservation", {"x": 1})
+    poll_uuid = store.register_poll_request("ohip", "reservation", session_id=session_id)
+
+    row = store.get_poll_request(poll_uuid)
+    assert row["session_id"] == session_id
+
+
+def test_poll_request_not_found(store):
+    assert store.get_poll_request("nonexistent-uuid") is None
+
+
+# ---------------------------------------------------------------------------
+# Admin: list sessions
+# ---------------------------------------------------------------------------
+
+
+def test_list_sessions_empty(store):
+    assert store.list_sessions() == []
+
+
+def test_list_sessions(store):
+    store.store_session_payload("ohip", "reservation", {"a": 1})
+    store.store_session_payload("ohip", "reservation", {"b": 2})
+
+    sessions = store.list_sessions()
+    assert len(sessions) == 2
+    assert all("session_id" in s for s in sessions)
+    assert all("created_at" in s for s in sessions)
