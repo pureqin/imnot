@@ -104,3 +104,26 @@ def test_unsupported_pattern(tmp_path):
     )
     result = load_partners(tmp_path)
     assert result == []
+
+
+def test_async_pattern_is_valid(tmp_path):
+    partner_dir = tmp_path / "testpartner"
+    partner_dir.mkdir()
+    (partner_dir / "partner.yaml").write_text(
+        "partner: testpartner\n"
+        "datapoints:\n"
+        "  - name: job\n"
+        "    pattern: async\n"
+        "    endpoints:\n"
+        "      - step: 1\n"
+        "        method: POST\n"
+        "        path: /jobs\n"
+        "        response:\n"
+        "          status: 202\n"
+        "          generates_id: true\n"
+        "          id_header: Location\n"
+        "          id_header_value: /jobs/{id}\n"
+    )
+    result = load_partners(tmp_path)
+    assert len(result) == 1
+    assert result[0].datapoints[0].pattern == "async"

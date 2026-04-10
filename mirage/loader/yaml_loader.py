@@ -19,7 +19,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-SUPPORTED_PATTERNS = {"oauth", "poll", "push", "static", "fetch"}
+SUPPORTED_PATTERNS = {"oauth", "async", "push", "static", "fetch"}
 
 
 # ---------------------------------------------------------------------------
