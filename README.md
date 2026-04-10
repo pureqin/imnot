@@ -176,7 +176,7 @@ configurable. Behavior is opt-in via two response flags:
 - `generates_id: true` — generate a UUID and deliver it via header or body field
 - `returns_payload: true` — return the stored payload for this datapoint
 
-**OHIP-style (header delivery, 3 steps):**
+**Header delivery (3 steps):**
 
 ```yaml
 - name: reservation
@@ -205,7 +205,7 @@ configurable. Behavior is opt-in via two response flags:
         returns_payload: true
 ```
 
-**Cloudbeds-style (body delivery, separate status and results endpoints):**
+**Body delivery (separate status and results endpoints):**
 
 ```yaml
 - name: rate-push
@@ -213,21 +213,21 @@ configurable. Behavior is opt-in via two response flags:
   endpoints:
     - step: 1
       method: POST
-      path: /cloudbeds/rates
+      path: /ratesync/rates
       response:
         status: 200
         generates_id: true
         id_body_field: JobReferenceID
     - step: 2
       method: GET
-      path: /cloudbeds/jobs/{id}/status
+      path: /ratesync/jobs/{id}/status
       response:
         status: 200
         body:
           status: COMPLETED
     - step: 3
       method: GET
-      path: /cloudbeds/jobs/{id}/results
+      path: /ratesync/jobs/{id}/results
       response:
         status: 200
         returns_payload: true
