@@ -76,6 +76,11 @@ cd mirage
 docker compose up
 ```
 
+The server is now running at `http://127.0.0.1:8000`. To see what endpoints are available:
+```bash
+docker compose exec mirage mirage routes
+```
+
 **Without Docker:**
 
 Requires Python 3.11 or later.
