@@ -69,20 +69,6 @@ body-delivered IDs are all supported. See the `async` pattern documentation belo
 
 ## Quick start
 
-**With Docker (recommended):**
-```bash
-git clone https://github.com/edu2105/mirage.git
-cd mirage
-docker compose up
-```
-
-The server is now running at `http://127.0.0.1:8000`. To see what endpoints are available:
-```bash
-docker compose exec mirage mirage routes
-```
-
-**Without Docker:**
-
 Requires Python 3.11 or later.
 
 ```bash
@@ -305,6 +291,10 @@ Set `MIRAGE_ADMIN_KEY` in `docker-compose.yml` for Docker deployments.
 | `mirage sessions clear` | Delete all sessions from the store |
 
 ## Docker
+
+Use Docker when you want to run Mirage as a persistent background service — for example,
+on a shared dev server, in CI, or alongside other containers. For local development,
+the local install above is simpler.
 
 The `partners/` directory and `data/` (SQLite db) are volume-mounted — partners
 can be added without rebuilding the image, and state persists across restarts.
