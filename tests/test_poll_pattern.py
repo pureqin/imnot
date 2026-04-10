@@ -81,7 +81,7 @@ async def test_step1_registers_poll_request(handlers, store):
     response = await handlers[1](request)
 
     uuid = response.headers["Location"].split("/")[-1]
-    row = store.get_poll_request(uuid)
+    row = store.get_async_request(uuid)
     assert row is not None
     assert row["partner"] == "staylink"
     assert row["datapoint"] == "reservation"
@@ -97,7 +97,7 @@ async def test_step1_stores_session_id_from_header(handlers, store):
     response = await handlers[1](request)
 
     uuid = response.headers["Location"].split("/")[-1]
-    row = store.get_poll_request(uuid)
+    row = store.get_async_request(uuid)
     assert row["session_id"] == "test-session-123"
 
 

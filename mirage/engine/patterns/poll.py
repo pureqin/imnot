@@ -63,12 +63,12 @@ def _make_step1(
 
     async def step1(request: Request) -> Response:
         session_id: str | None = request.headers.get("X-Mirage-Session")
-        poll_uuid = store.register_poll_request(
+        async_uuid = store.register_async_request(
             partner=partner,
             datapoint=dp_name,
             session_id=session_id,
         )
-        location = location_template.format(uuid=poll_uuid)
+        location = location_template.format(uuid=async_uuid)
         return Response(
             status_code=status_code,
             headers={"Location": location},
@@ -106,8 +106,8 @@ def _make_step3(
     status_code: int = endpoint.response.get("status", 200)
 
     async def step3(uuid: str, request: Request) -> Response:
-        poll_row = store.get_poll_request(uuid)
-        if poll_row is None:
+        async_row = store.get_async_request(uuid)
+        if async_row is None:
             return JSONResponse(
                 status_code=404,
                 content={"detail": f"Unknown request UUID: {uuid}"},

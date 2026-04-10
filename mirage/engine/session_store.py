@@ -82,13 +82,16 @@ class SessionStore:
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         # Migrate poll_requests → async_requests for existing databases
-        old_table = self._conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='poll_requests'"
-        ).fetchone()
-        if old_table:
-            self._conn.execute("ALTER TABLE poll_requests RENAME TO async_requests")
-            self._conn.commit()
-            logger.info("Migrated poll_requests table to async_requests")
+        try:
+            old_table = self._conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='poll_requests'"
+            ).fetchone()
+            if old_table:
+                self._conn.execute("ALTER TABLE poll_requests RENAME TO async_requests")
+                self._conn.commit()
+                logger.info("Migrated poll_requests table to async_requests")
+        except sqlite3.OperationalError as exc:
+            logger.warning("Could not migrate poll_requests table: %s", exc)
         self._conn.executescript(_DDL)
         self._conn.commit()
         logger.info("Session store initialised at %s", self.db_path)
