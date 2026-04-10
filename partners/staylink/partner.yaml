@@ -27,7 +27,7 @@ datapoints:
           generates_id: true
           id_header: Location
           id_header_value: /staylink/reservations/{id}
-      # Step 2 — poll for completion status
+      # Step 2 — check completion status
       - step: 2
         method: HEAD
         path: /staylink/reservations/{id}
