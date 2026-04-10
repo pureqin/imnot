@@ -192,19 +192,18 @@ def test_oauth_token(client):
 
 
 # ---------------------------------------------------------------------------
-# Poll consumer routes — global payload flow
+# Staylink consumer routes (async pattern)
 # ---------------------------------------------------------------------------
 
 
-def test_poll_step1_returns_202_and_location(client):
+def test_staylink_step1_returns_202_and_location(client):
     r = client.post("/staylink/reservations")
     assert r.status_code == 202
     assert "Location" in r.headers
     assert "/staylink/reservations/" in r.headers["Location"]
 
 
-def test_poll_step2_returns_201_and_status(client):
-    # Step 1 to get a UUID
+def test_staylink_step2_returns_201_and_status(client):
     r1 = client.post("/staylink/reservations")
     uuid = r1.headers["Location"].split("/")[-1]
 
@@ -213,7 +212,7 @@ def test_poll_step2_returns_201_and_status(client):
     assert r2.headers.get("Status") == "COMPLETED"
 
 
-def test_poll_step3_returns_global_payload(client):
+def test_staylink_step3_returns_global_payload(client):
     client.post("/mirage/admin/staylink/reservation/payload", json={"reservationId": "RES001"})
 
     r1 = client.post("/staylink/reservations")
@@ -224,45 +223,35 @@ def test_poll_step3_returns_global_payload(client):
     assert r3.json() == {"reservationId": "RES001"}
 
 
-def test_poll_step3_unknown_uuid_returns_404(client):
+def test_staylink_step3_unknown_uuid_returns_404(client):
     r = client.get("/staylink/reservations/nonexistent-uuid")
     assert r.status_code == 404
 
 
-def test_poll_step3_no_payload_returns_404(client):
+def test_staylink_step3_no_payload_returns_404(client):
     r1 = client.post("/staylink/reservations")
     uuid = r1.headers["Location"].split("/")[-1]
-
     r3 = client.get(f"/staylink/reservations/{uuid}")
     assert r3.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# Poll consumer routes — session payload flow
-# ---------------------------------------------------------------------------
-
-
-def test_full_session_flow(client):
-    # Upload session payload
+def test_staylink_full_session_flow(client):
     r = client.post(
         "/mirage/admin/staylink/reservation/payload/session",
         json={"reservationId": "SES001"},
     )
     session_id = r.json()["session_id"]
 
-    # Step 1 with session header
     r1 = client.post("/staylink/reservations", headers={"X-Mirage-Session": session_id})
     assert r1.status_code == 202
     uuid = r1.headers["Location"].split("/")[-1]
 
-    # Step 3 with session header
     r3 = client.get(f"/staylink/reservations/{uuid}", headers={"X-Mirage-Session": session_id})
     assert r3.status_code == 200
     assert r3.json() == {"reservationId": "SES001"}
 
 
-def test_session_does_not_leak_to_global(client):
-    # Upload session payload only — no global
+def test_staylink_session_does_not_leak_to_global(client):
     r = client.post(
         "/mirage/admin/staylink/reservation/payload/session",
         json={"reservationId": "SES001"},
@@ -272,12 +261,11 @@ def test_session_does_not_leak_to_global(client):
     r1 = client.post("/staylink/reservations")
     uuid = r1.headers["Location"].split("/")[-1]
 
-    # GET without session header → no global payload → 404
     r3 = client.get(f"/staylink/reservations/{uuid}")
     assert r3.status_code == 404
 
 
-def test_two_sessions_are_isolated(client):
+def test_staylink_two_sessions_are_isolated(client):
     s1 = client.post(
         "/mirage/admin/staylink/reservation/payload/session", json={"user": "alice"}
     ).json()["session_id"]

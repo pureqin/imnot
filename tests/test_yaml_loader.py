@@ -48,7 +48,7 @@ def test_staylink_reservation_datapoint():
     staylink = next(p for p in load_partners(PARTNERS_DIR) if p.partner == "staylink")
     reservation = next(dp for dp in staylink.datapoints if dp.name == "reservation")
 
-    assert reservation.pattern == "poll"
+    assert reservation.pattern == "async"
     assert len(reservation.endpoints) == 3
 
     steps = {ep.step: ep for ep in reservation.endpoints}
@@ -56,7 +56,9 @@ def test_staylink_reservation_datapoint():
 
     assert steps[1].method == "POST"
     assert steps[1].response["status"] == 202
-    assert "location_template" in steps[1].response
+    assert steps[1].response["generates_id"] is True
+    assert steps[1].response["id_header"] == "Location"
+    assert steps[1].response["id_header_value"] == "/staylink/reservations/{id}"
 
     assert steps[2].method == "HEAD"
     assert steps[2].response["status"] == 201
@@ -64,6 +66,7 @@ def test_staylink_reservation_datapoint():
 
     assert steps[3].method == "GET"
     assert steps[3].response["status"] == 200
+    assert steps[3].response["returns_payload"] is True
 
 
 # ---------------------------------------------------------------------------

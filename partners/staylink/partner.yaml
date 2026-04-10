@@ -1,5 +1,5 @@
 partner: staylink
-description: StayLink fictional partner — demonstrates oauth and poll patterns
+description: StayLink fictional partner — demonstrates oauth and async patterns
 
 datapoints:
 
@@ -16,7 +16,7 @@ datapoints:
 
   - name: reservation
     description: Async reservation creation and retrieval
-    pattern: poll
+    pattern: async
     endpoints:
       # Step 1 — submit reservation request
       - step: 1
@@ -24,11 +24,13 @@ datapoints:
         path: /staylink/reservations
         response:
           status: 202
-          location_template: /staylink/reservations/{uuid}
+          generates_id: true
+          id_header: Location
+          id_header_value: /staylink/reservations/{id}
       # Step 2 — poll for completion status
       - step: 2
         method: HEAD
-        path: /staylink/reservations/{uuid}
+        path: /staylink/reservations/{id}
         response:
           status: 201
           headers:
@@ -36,6 +38,7 @@ datapoints:
       # Step 3 — retrieve stored payload
       - step: 3
         method: GET
-        path: /staylink/reservations/{uuid}
+        path: /staylink/reservations/{id}
         response:
           status: 200
+          returns_payload: true
