@@ -40,7 +40,7 @@ def make_async_handlers(
         elif endpoint.response.get("returns_payload"):
             handler = _make_fetch_handler(partner, datapoint, endpoint, store)
         else:
-            handler = _make_static_handler(datapoint, endpoint)
+            handler = _make_static_handler(partner, datapoint, endpoint)
         handlers[endpoint.step] = handler
     return handlers
 
@@ -96,6 +96,7 @@ def _make_submit_handler(
 
 
 def _make_static_handler(
+    partner: str,
     datapoint: DatapointDef,
     endpoint: EndpointDef,
 ) -> Callable:
@@ -114,7 +115,7 @@ def _make_static_handler(
         async def handler(request: Request) -> Response:
             return Response(status_code=status_code, headers=extra_headers)
 
-    handler.__name__ = f"async_static_{datapoint.name}_{endpoint.step}"
+    handler.__name__ = f"async_static_{partner}_{datapoint.name}_{endpoint.step}"
     return handler
 
 
