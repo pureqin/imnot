@@ -181,3 +181,121 @@ async def test_submit_body_merges_static_body_fields(store):
     body = json.loads(response.body)
     assert body["extraField"] == "extraValue"
     assert len(body["JobReferenceID"]) == 36
+
+
+# ---------------------------------------------------------------------------
+# Static handler
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def static_handler_headers_only(store):
+    ep = EndpointDef(
+        method="HEAD", path="/jobs/{id}", step=2,
+        response={
+            "status": 201,
+            "headers": {"Status": "COMPLETED"},
+        },
+    )
+    return make_async_handlers("partner", _make_datapoint([ep]), store)[2]
+
+
+@pytest.fixture
+def static_handler_with_body(store):
+    ep = EndpointDef(
+        method="GET", path="/jobs/{id}/status", step=2,
+        response={
+            "status": 200,
+            "body": {"status": "COMPLETED"},
+        },
+    )
+    return make_async_handlers("partner", _make_datapoint([ep]), store)[2]
+
+
+@pytest.mark.asyncio
+async def test_static_returns_configured_status(static_handler_headers_only):
+    response = await static_handler_headers_only(_request())
+    assert response.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_static_returns_configured_headers(static_handler_headers_only):
+    response = await static_handler_headers_only(_request())
+    assert response.headers.get("Status") == "COMPLETED"
+
+
+@pytest.mark.asyncio
+async def test_static_with_body_returns_body(static_handler_with_body):
+    response = await static_handler_with_body(_request())
+    assert response.status_code == 200
+    body = json.loads(response.body)
+    assert body == {"status": "COMPLETED"}
+
+
+# ---------------------------------------------------------------------------
+# Fetch handler
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def fetch_handler(store):
+    ep = EndpointDef(
+        method="GET", path="/jobs/{id}", step=3,
+        response={"status": 200, "returns_payload": True},
+    )
+    return make_async_handlers("partner", _make_datapoint([ep]), store)[3]
+
+
+def _request_with_id(async_uuid: str, session_id: str | None = None) -> Request:
+    headers = []
+    if session_id:
+        headers.append((b"x-mirage-session", session_id.encode()))
+    scope = {
+        "type": "http",
+        "headers": headers,
+        "path_params": {"id": async_uuid},
+    }
+    return Request(scope)
+
+
+@pytest.mark.asyncio
+async def test_fetch_unknown_uuid_returns_404(fetch_handler):
+    response = await fetch_handler(_request_with_id("nonexistent-uuid"))
+    assert response.status_code == 404
+    assert "nonexistent-uuid" in json.loads(response.body)["detail"]
+
+
+@pytest.mark.asyncio
+async def test_fetch_returns_global_payload(fetch_handler, store):
+    async_uuid = store.register_async_request("partner", "job", session_id=None)
+    store.store_global_payload("partner", "job", {"result": "ok"})
+
+    response = await fetch_handler(_request_with_id(async_uuid))
+    assert response.status_code == 200
+    assert json.loads(response.body) == {"result": "ok"}
+
+
+@pytest.mark.asyncio
+async def test_fetch_returns_session_payload(fetch_handler, store):
+    session_id = store.store_session_payload("partner", "job", {"result": "session-ok"})
+    async_uuid = store.register_async_request("partner", "job", session_id=session_id)
+
+    response = await fetch_handler(_request_with_id(async_uuid, session_id=session_id))
+    assert response.status_code == 200
+    assert json.loads(response.body) == {"result": "session-ok"}
+
+
+@pytest.mark.asyncio
+async def test_fetch_no_payload_returns_404(fetch_handler, store):
+    async_uuid = store.register_async_request("partner", "job", session_id=None)
+    response = await fetch_handler(_request_with_id(async_uuid))
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_fetch_session_header_but_no_session_payload_returns_404(fetch_handler, store):
+    store.store_global_payload("partner", "job", {"source": "global"})
+    async_uuid = store.register_async_request("partner", "job", session_id=None)
+
+    response = await fetch_handler(_request_with_id(async_uuid, session_id="ghost-session"))
+    assert response.status_code == 404

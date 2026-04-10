@@ -91,7 +91,7 @@ def _make_submit_handler(
 
 
 # ---------------------------------------------------------------------------
-# Static handler  (placeholder — implemented in Task 3)
+# Static handler
 # ---------------------------------------------------------------------------
 
 
@@ -99,15 +99,27 @@ def _make_static_handler(
     datapoint: DatapointDef,
     endpoint: EndpointDef,
 ) -> Callable:
-    async def handler(request: Request) -> Response:
-        raise NotImplementedError("static handler not yet implemented")
+    status_code: int = endpoint.response.get("status", 200)
+    extra_headers: dict[str, str] = endpoint.response.get("headers") or {}
+    static_body: dict[str, Any] | None = endpoint.response.get("body")
+
+    if static_body is not None:
+        async def handler(request: Request) -> Response:
+            return JSONResponse(
+                status_code=status_code,
+                content=static_body,
+                headers=extra_headers,
+            )
+    else:
+        async def handler(request: Request) -> Response:
+            return Response(status_code=status_code, headers=extra_headers)
 
     handler.__name__ = f"async_static_{datapoint.name}_{endpoint.step}"
     return handler
 
 
 # ---------------------------------------------------------------------------
-# Fetch handler  (placeholder — implemented in Task 3)
+# Fetch handler
 # ---------------------------------------------------------------------------
 
 
@@ -117,8 +129,34 @@ def _make_fetch_handler(
     endpoint: EndpointDef,
     store: SessionStore,
 ) -> Callable:
-    async def handler(request: Request) -> Response:
-        raise NotImplementedError("fetch handler not yet implemented")
+    dp_name = datapoint.name
+    status_code: int = endpoint.response.get("status", 200)
 
-    handler.__name__ = f"async_fetch_{partner}_{datapoint.name}_{endpoint.step}"
+    async def handler(request: Request) -> Response:
+        async_uuid: str | None = request.path_params.get("id")
+        row = store.get_async_request(async_uuid)
+        if row is None:
+            return JSONResponse(
+                status_code=404,
+                content={"detail": f"Unknown request ID: {async_uuid}"},
+            )
+
+        session_id: str | None = request.headers.get("X-Mirage-Session")
+        payload: dict[str, Any] | None = store.resolve_payload(
+            partner=partner,
+            datapoint=dp_name,
+            session_id=session_id,
+        )
+
+        if payload is None:
+            detail = (
+                f"No session payload found for session '{session_id}'"
+                if session_id
+                else f"No global payload found for {partner}/{dp_name}"
+            )
+            return JSONResponse(status_code=404, content={"detail": detail})
+
+        return JSONResponse(status_code=status_code, content=payload)
+
+    handler.__name__ = f"async_fetch_{partner}_{dp_name}"
     return handler
