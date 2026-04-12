@@ -434,6 +434,52 @@ def test_export_postman_invalid_partners_dir(runner, tmp_path):
     assert result.exit_code != 0
 
 
+def test_export_postman_single_partner_filter(runner, tmp_path):
+    """--partner filters the collection to just that partner."""
+    out = tmp_path / "collection.json"
+    # PARTNERS_DIR has staylink and bookingco
+    result = runner.invoke(cli, [
+        "export", "postman",
+        "--partners-dir", str(PARTNERS_DIR),
+        "--out", str(out),
+        "--partner", "staylink",
+    ])
+    assert result.exit_code == 0, result.output
+    data = json.loads(out.read_text())
+    folder_names = [item["name"] for item in data["item"]]
+    assert folder_names == ["staylink"]
+
+
+def test_export_postman_multiple_partner_filter(runner, tmp_path):
+    """Multiple --partner flags are all included."""
+    out = tmp_path / "collection.json"
+    result = runner.invoke(cli, [
+        "export", "postman",
+        "--partners-dir", str(PARTNERS_DIR),
+        "--out", str(out),
+        "--partner", "staylink",
+        "--partner", "bookingco",
+    ])
+    assert result.exit_code == 0, result.output
+    data = json.loads(out.read_text())
+    folder_names = {item["name"] for item in data["item"]}
+    assert "staylink" in folder_names
+    assert "bookingco" in folder_names
+
+
+def test_export_postman_unknown_partner_exits_nonzero(runner, tmp_path):
+    """--partner with an unknown name exits non-zero with a helpful error."""
+    out = tmp_path / "collection.json"
+    result = runner.invoke(cli, [
+        "export", "postman",
+        "--partners-dir", str(PARTNERS_DIR),
+        "--out", str(out),
+        "--partner", "doesnotexist",
+    ])
+    assert result.exit_code != 0
+    assert "doesnotexist" in result.output
+
+
 # ---------------------------------------------------------------------------
 # Admin endpoint: GET /mirage/admin/postman
 # ---------------------------------------------------------------------------

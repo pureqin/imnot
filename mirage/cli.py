@@ -351,7 +351,14 @@ def export() -> None:
     show_default=True,
     help="Directory containing partner YAML definitions.",
 )
-def export_postman(out: str, partners_dir: str) -> None:
+@click.option(
+    "--partner",
+    "selected_partners",
+    multiple=True,
+    metavar="NAME",
+    help="Include only this partner (repeatable). Omit to include all.",
+)
+def export_postman(out: str, partners_dir: str, selected_partners: tuple[str, ...]) -> None:
     """Generate a Postman collection v2.1 JSON file from loaded partner definitions."""
     try:
         resolved = _resolve_partners_dir(partners_dir)
@@ -363,6 +370,18 @@ def export_postman(out: str, partners_dir: str) -> None:
     if not partners:
         click.echo("No partners loaded — nothing to export.", err=True)
         raise SystemExit(1)
+
+    if selected_partners:
+        available = {p.partner for p in partners}
+        unknown = [name for name in selected_partners if name not in available]
+        if unknown:
+            click.echo(
+                f"Unknown partner(s): {', '.join(unknown)}. "
+                f"Available: {', '.join(sorted(available))}",
+                err=True,
+            )
+            raise SystemExit(1)
+        partners = [p for p in partners if p.partner in set(selected_partners)]
 
     collection = build_postman_collection(partners)
     out_path = Path(out)
