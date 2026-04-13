@@ -22,6 +22,9 @@ PLAN.md
 CLAUDE.md
 .claude/
 
+# Generated artifacts
+mirage-collection.json
+
 # Superpowers plugin output
 docs/superpowers/
 superpowers/

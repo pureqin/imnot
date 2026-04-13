@@ -380,6 +380,13 @@ Use Docker when you want to run Mirage as a persistent background service — fo
 on a shared dev server, in CI, or alongside other containers. For local development,
 the local install above is simpler.
 
+A pre-built image is published at `ghcr.io/edu2105/mirage:latest`. To use it without
+building locally, set the image in `docker-compose.yml`:
+
+```yaml
+image: ghcr.io/edu2105/mirage:latest
+```
+
 The `partners/` directory and `data/` (SQLite db) are volume-mounted — partners
 can be added without rebuilding the image, and state persists across restarts.
 
