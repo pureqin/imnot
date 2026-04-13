@@ -402,41 +402,19 @@ environment:
 
 ## Deploy to the cloud
 
-Always set `MIRAGE_ADMIN_KEY` when deploying outside localhost.
+The published Docker image (`ghcr.io/edu2105/mirage`) runs on any container platform.
+How you get that container running in your cloud is your domain — the specifics depend
+on your provider, infrastructure, and team setup. What Mirage does require, regardless
+of where it runs:
 
-**Railway**
-
-Create a project, attach a volume mounted at `/app/data`, and set `PARTNERS_DIR` if
-your partner YAMLs are not committed to the repo. Deploy with:
-
-```bash
-railway up
-```
-
-Set `MIRAGE_ADMIN_KEY` in the Railway environment variables dashboard.
-If you store partners in the repo, the `partners/` directory is included in the deploy
-automatically. For a persistent SQLite database, mount a volume at `/app/data` and point
-Mirage at it with `--db /app/data/mirage.db` via the start command.
-
-**Render**
-
-Create a new Web Service using the Docker runtime. Add a persistent disk mounted at
-`/app/data`. Set the start command to `mirage start --db /app/data/mirage.db --host 0.0.0.0`.
-Set `MIRAGE_ADMIN_KEY` in the environment variables panel. Render rebuilds the image on
-each push; partners committed to the repo are available immediately after deploy.
-
-**Any Linux VM (EC2, DigitalOcean, etc.)**
-
-```bash
-git clone https://github.com/edu2105/mirage.git
-cd mirage
-# Set your admin key in docker-compose.yml or as an env var, then:
-MIRAGE_ADMIN_KEY=your-secret-key docker compose up -d
-```
-
-Put Nginx in front to terminate TLS and proxy to `127.0.0.1:8000`. The `partners/` and
-`data/` directories are volume-mounted, so adding a partner or backing up state requires
-no container access.
+- **Persistent storage** — mount a volume at `/app/data` so the SQLite database
+  survives container restarts. Without it, all session state is lost on redeploy.
+- **Admin key** — set `MIRAGE_ADMIN_KEY` via environment variable. Required for
+  any deployment reachable outside localhost.
+- **Host binding** — pass `--host 0.0.0.0` as the start command so the container
+  port is reachable from outside. The default `127.0.0.1` binding blocks external traffic.
+- **Partner YAMLs** — either commit them to the repo (included in the image build)
+  or mount a volume at `/app/partners` to manage them independently.
 
 ## Adding a new partner
 
