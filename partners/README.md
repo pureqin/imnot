@@ -471,8 +471,12 @@ Fixed infra endpoints (always available regardless of partners loaded):
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET`  | `/mirage/admin/partners` | List all loaded partners and their datapoints |
+| `POST` | `/mirage/admin/partners` | Register a new partner from a raw YAML body — routes go live immediately |
 | `GET`  | `/mirage/admin/sessions` | List all active sessions |
 | `POST` | `/mirage/admin/reload`   | Hot-reload partner YAMLs — updates static response bodies in place, registers new partners/datapoints |
+
+`POST /mirage/admin/partners` is the HTTP equivalent of `mirage generate` — use it when Mirage
+runs in a container and you cannot exec in to run the CLI. See the main README for usage examples.
 
 ---
 

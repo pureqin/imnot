@@ -25,6 +25,8 @@ CLAUDE.md
 # Generated artifacts
 mirage-collection.json
 
+# Design docs — kept local only
+docs/
+
 # Superpowers plugin output
-docs/superpowers/
 superpowers/

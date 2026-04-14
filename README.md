@@ -330,9 +330,19 @@ Fixed infra endpoints (always available regardless of which partners are loaded)
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET`  | `/mirage/admin/partners` | List all loaded partners and their datapoints |
+| `POST` | `/mirage/admin/partners` | Validate and register a new partner from a raw YAML body — routes go live immediately |
 | `GET`  | `/mirage/admin/sessions` | List all active sessions |
 | `POST` | `/mirage/admin/reload`   | Hot-reload partner YAMLs without restarting the server |
 | `GET`  | `/mirage/admin/postman`  | Download a Postman collection v2.1 JSON for all loaded partners |
+
+`POST /mirage/admin/partners` accepts a raw YAML body (same format as `partner.yaml` files).
+Use `?force=true` to overwrite an existing partner. Returns `201` on create, `200` on overwrite,
+`409` if the partner already exists without `force`, and `422` for invalid YAML.
+
+> **Note — ephemeral storage:** partners written at runtime are stored on the server's local
+> filesystem. In a containerised deployment (Docker, Kubernetes), they will be lost if the pod
+> restarts unless the partners directory is backed by a persistent volume. This is an
+> infrastructure concern — Mirage does not manage persistence.
 
 Docs endpoints (public, no auth required):
 
@@ -432,6 +442,8 @@ of where it runs:
 
 ## Adding a new partner
 
+### From the CLI (local / development)
+
 Use `mirage generate` to validate and scaffold a partner YAML in one step — no need to know
 the directory layout or manually create files.
 
@@ -443,9 +455,35 @@ mirage generate --file /path/to/partner.yaml
 mirage generate --dry-run --file /path/to/partner.yaml --json
 ```
 
-`mirage generate` validates the YAML using the same loader that runs at startup, creates
-`partners/<name>/` if it does not exist, writes the file, and prints a summary of all
-consumer and admin endpoints that will be registered.
+`mirage generate` validates the YAML, creates `partners/<name>/` if needed, writes the file,
+and prints a summary of all consumer and admin endpoints.
+
+**With `--reload` (recommended for development):** the server picks up the new file and restarts automatically.
+
+**Without `--reload`:** call `POST /mirage/admin/reload` or restart `mirage start`.
+
+### Over HTTP (containerised deployment)
+
+When Mirage runs as a pod or container, use `POST /mirage/admin/partners` to register a new
+partner without exec-ing into the container. The endpoint validates the YAML, writes it to
+the partners directory, and registers its routes immediately — no restart required.
+
+```bash
+curl -X POST http://localhost:8000/mirage/admin/partners \
+     -H "Authorization: Bearer $MIRAGE_ADMIN_KEY" \
+     --data-binary @/path/to/partner.yaml
+
+# Overwrite an existing partner definition:
+curl -X POST "http://localhost:8000/mirage/admin/partners?force=true" \
+     -H "Authorization: Bearer $MIRAGE_ADMIN_KEY" \
+     --data-binary @/path/to/partner.yaml
+```
+
+`mirage generate` and `POST /mirage/admin/partners` use identical validation — both write the
+same `partners/<name>/partner.yaml` file and produce the same JSON result shape.
+
+> **Persistence reminder:** partners written at runtime live on the container's local filesystem.
+> Mount a persistent volume at `/app/partners` if you need them to survive restarts.
 
 You can also write the YAML manually. Either way, the directory structure is:
 
@@ -455,12 +493,6 @@ partners/
     ├── partner.yaml
     └── payloads/       # optional example payload files
 ```
-
-**With `--reload` (recommended for development):** the server detects the new file automatically
-and restarts. No manual action needed.
-
-**Without `--reload`:** call `POST /mirage/admin/reload` to register the new partner's routes
-without restarting the server. Or simply restart `mirage start`.
 
 ## Project structure
 
@@ -473,6 +505,7 @@ mirage/
 │   │   ├── router.py  # dynamic route registration
 │   │   └── session_store.py  # SQLite persistence
 │   ├── loader/        # YAML partner definition parser
+│   ├── partners.py    # register_partner() — shared by CLI and HTTP admin endpoint
 │   └── cli.py         # mirage CLI
 ├── partners/
 │   ├── staylink/      # StayLink example (oauth + async)

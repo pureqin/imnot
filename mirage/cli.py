@@ -25,7 +25,8 @@ import yaml
 from mirage.api.server import create_app
 from mirage.engine.router import _PAYLOAD_PATTERNS
 from mirage.engine.session_store import SessionStore
-from mirage.loader.yaml_loader import load_partners, parse_partner_yaml
+from mirage.loader.yaml_loader import load_partners
+from mirage.partners import register_partner
 from mirage.postman import build_postman_collection, collection_stats
 
 DEFAULT_PARTNERS_DIR = "partners"
@@ -209,6 +210,7 @@ def routes(partners_dir: str) -> None:
     click.echo()
     click.echo("  INFRA ENDPOINTS")
     click.echo(f"    {'GET':<7} /mirage/admin/partners")
+    click.echo(f"    {'POST':<7} /mirage/admin/partners")
     click.echo(f"    {'GET':<7} /mirage/admin/sessions")
     click.echo(f"    {'POST':<7} /mirage/admin/reload")
 
@@ -248,25 +250,13 @@ def generate(file_path: str, partners_dir: str, dry_run: bool, json_output: bool
             _fail(str(exc), json_output, 1)
 
     try:
-        partner = parse_partner_yaml(raw)
+        result = register_partner(raw, resolved_partners_dir, force=force, dry_run=dry_run)
     except (yaml.YAMLError, ValueError) as exc:
         _fail(str(exc), json_output, 1)
+    except FileExistsError as exc:
+        _fail(str(exc), json_output, 2)
 
-    dest_dir = resolved_partners_dir / partner.partner
-    dest_file = dest_dir / "partner.yaml"
-    file_exists = dest_file.exists()
-
-    if file_exists and not force:
-        _fail(
-            f"partners/{partner.partner}/partner.yaml already exists. Use --force to overwrite.",
-            json_output,
-            2,
-        )
-
-    if not dry_run:
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest_file.write_text(raw)
-
+    partner = result.partner
     payload_dps = [dp for dp in partner.datapoints if dp.pattern in _PAYLOAD_PATTERNS]
     payload_dp_names = {dp.name for dp in payload_dps}
 
@@ -277,7 +267,7 @@ def generate(file_path: str, partners_dir: str, dry_run: bool, json_output: bool
             "description": partner.description,
             "directory": f"partners/{partner.partner}",
             "file": f"partners/{partner.partner}/partner.yaml",
-            "created": False if dry_run else not file_exists,
+            "created": result.created,
             "datapoints": [
                 {
                     "name": dp.name,
@@ -292,7 +282,7 @@ def generate(file_path: str, partners_dir: str, dry_run: bool, json_output: bool
 
     if dry_run:
         dir_note, file_note = "(dry run)", "(dry run)"
-    elif file_exists:
+    elif not result.created:
         dir_note, file_note = "(exists)", "(overwritten)"
     else:
         dir_note, file_note = "(created)", "(written)"

@@ -612,3 +612,165 @@ def test_generate_then_reload_activates_routes(runner, tmp_path):
     assert r.json() == payload
 
     store.close()
+
+
+# ---------------------------------------------------------------------------
+# POST /mirage/admin/partners
+# ---------------------------------------------------------------------------
+
+
+_NEW_PARTNER_YAML = """\
+partner: bookingco
+description: BookingCo mock
+
+datapoints:
+  - name: reservation
+    description: Fetch a reservation
+    pattern: fetch
+    endpoints:
+      - method: GET
+        path: /bookingco/v1/reservations/{id}
+        response:
+          status: 200
+"""
+
+_STATIC_PARTNER_YAML = """\
+partner: staticco
+description: StaticCo mock
+
+datapoints:
+  - name: status
+    description: Status endpoint
+    pattern: static
+    endpoints:
+      - method: GET
+        path: /staticco/status
+        response:
+          status: 200
+          body:
+            ok: true
+"""
+
+
+def _make_client(tmp_path, store):
+    """Server seeded from an empty partners dir, with partners_dir set."""
+    partners_dir = tmp_path / "partners"
+    partners_dir.mkdir()
+    app = FastAPI()
+    register_routes(app, [], store, partners_dir=partners_dir)
+    return TestClient(app, raise_server_exceptions=True), partners_dir
+
+
+def test_create_partner_returns_201_and_routes_live(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    r = c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    assert r.status_code == 201
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["partner"] == "bookingco"
+    assert body["created"] is True
+    assert any(ep["path"] == "/bookingco/v1/reservations/{id}" for dp in body["datapoints"] for ep in dp["endpoints"])
+
+    # Route is live immediately
+    r2 = c.get("/bookingco/v1/reservations/123", headers={"X-Mirage-Session": "s1"})
+    assert r2.status_code in (200, 404)  # 404 = no payload set yet, but route exists
+
+
+def test_create_partner_writes_file_to_disk(tmp_path, store):
+    c, partners_dir = _make_client(tmp_path, store)
+
+    c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+
+    dest = partners_dir / "bookingco" / "partner.yaml"
+    assert dest.exists()
+    assert dest.read_text() == _NEW_PARTNER_YAML
+
+
+def test_create_partner_conflict_returns_409(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    r = c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    assert r.status_code == 409
+    assert "already exists" in r.json()["detail"]
+
+
+def test_create_partner_force_overwrites_returns_200(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    r = c.post("/mirage/admin/partners?force=true", content=_NEW_PARTNER_YAML)
+    assert r.status_code == 200
+    assert r.json()["created"] is False
+
+
+def test_create_partner_invalid_yaml_returns_422(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    r = c.post("/mirage/admin/partners", content="partner: broken\n  bad: [yaml")
+    assert r.status_code == 422
+    assert r.json()["status"] == "error"
+
+
+def test_create_partner_missing_schema_field_returns_422(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    bad_yaml = (
+        "partner: badpartner\n"
+        "description: Missing pattern\n"
+        "datapoints:\n"
+        "  - name: broken\n"
+        "    description: no pattern\n"
+        "    endpoints:\n"
+        "      - method: GET\n"
+        "        path: /bad\n"
+        "        response:\n"
+        "          status: 200\n"
+    )
+    r = c.post("/mirage/admin/partners", content=bad_yaml)
+    assert r.status_code == 422
+
+
+def test_create_partner_without_partners_dir_returns_400(store):
+    """When partners_dir is not set on app.state, endpoint returns 400."""
+    app = FastAPI()
+    register_routes(app, [], store)  # no partners_dir
+    c = TestClient(app, raise_server_exceptions=True)
+
+    r = c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    assert r.status_code == 400
+
+
+def test_create_partner_appears_in_list_partners(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+
+    r = c.get("/mirage/admin/partners")
+    partner_names = [p["partner"] for p in r.json()]
+    assert "bookingco" in partner_names
+
+
+def test_create_static_partner_routes_live(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    r = c.post("/mirage/admin/partners", content=_STATIC_PARTNER_YAML)
+    assert r.status_code == 201
+
+    r2 = c.get("/staticco/status")
+    assert r2.status_code == 200
+    assert r2.json() == {"ok": True}
+
+
+def test_create_partner_admin_routes_registered_for_fetch(tmp_path, store):
+    c, _ = _make_client(tmp_path, store)
+
+    r = c.post("/mirage/admin/partners", content=_NEW_PARTNER_YAML)
+    assert r.status_code == 201
+    dp = r.json()["datapoints"][0]
+    assert dp["admin_routes"] is True
+
+    # Admin payload endpoint is live
+    r2 = c.post("/mirage/admin/bookingco/reservation/payload", json={"id": "123"})
+    assert r2.status_code == 200

@@ -23,6 +23,8 @@ from typing import Any
 from fastapi import BackgroundTasks, FastAPI, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 
+import yaml
+
 from mirage.engine.patterns.async_ import make_async_handlers
 from mirage.engine.patterns.fetch import make_fetch_handler
 from mirage.engine.patterns.oauth import make_oauth_handler
@@ -30,6 +32,7 @@ from mirage.engine.patterns.push import fire_callback, make_push_handler
 from mirage.engine.patterns.static import make_static_handler
 from mirage.engine.session_store import SessionStore
 from mirage.loader.yaml_loader import DatapointDef, EndpointDef, PartnerDef, load_partners
+from mirage.partners import register_partner
 from mirage.postman import build_postman_collection
 
 logger = logging.getLogger(__name__)
@@ -415,13 +418,111 @@ def _register_infra_routes(
         status = "ok" if not conflicts else "partial"
         return JSONResponse({"status": status, "updated": updated, "added": added, "conflicts": conflicts})
 
+    async def create_partner_handler(request: Request) -> JSONResponse:
+        """Validate raw YAML body, write it to disk, and hot-load its routes.
+
+        Query params:
+            force (bool, default false) — overwrite if partner already exists.
+
+        Returns 201 on create, 200 on overwrite, 409 on conflict, 422 on bad YAML.
+        """
+        partners_dir: Path | None = request.app.state.partners_dir
+        if partners_dir is None:
+            return JSONResponse(
+                status_code=400,
+                content={"detail": "No partners_dir configured — server was not started via `mirage start`."},
+            )
+
+        force = request.query_params.get("force", "false").lower() == "true"
+        yaml_text = (await request.body()).decode()
+
+        try:
+            result = register_partner(yaml_text, partners_dir, force=force)
+        except (yaml.YAMLError, ValueError) as exc:
+            return JSONResponse(status_code=422, content={"status": "error", "detail": str(exc)})
+        except FileExistsError as exc:
+            return JSONResponse(status_code=409, content={"status": "error", "detail": str(exc)})
+
+        partner = result.partner
+        configs_: dict = request.app.state.configs
+        store_: SessionStore = request.app.state.store
+        registered_: dict[tuple[str, str], str] = request.app.state.registered_routes
+        registered_admin_: set[tuple[str, str]] = request.app.state.registered_admin_dps
+
+        added: list[str] = []
+        conflicts: list[str] = []
+
+        for dp in partner.datapoints:
+            # Hot-swap static response configs for already-registered routes
+            if dp.pattern == "static":
+                for ep in dp.endpoints:
+                    key = (partner.partner, dp.name, ep.method.upper(), ep.path)
+                    if key in configs_:
+                        configs_[key] = ep.response
+
+            # Register brand-new consumer routes
+            new_eps = [ep for ep in dp.endpoints if (ep.method.upper(), ep.path) not in registered_]
+            if new_eps:
+                try:
+                    _register_consumer_routes(request.app, partner, dp, store_, configs_, registered_)
+                    for ep in new_eps:
+                        added.append(f"{ep.method.upper()} {ep.path}")
+                except ValueError as exc:
+                    conflicts.append(str(exc))
+
+            # Register admin routes for new payload-pattern datapoints
+            if (
+                dp.pattern in _PAYLOAD_PATTERNS
+                and (partner.partner, dp.name) not in registered_admin_
+            ):
+                _register_admin_routes(request.app, partner, dp, store_)
+                registered_admin_.add((partner.partner, dp.name))
+                added.append(f"admin routes for {partner.partner}/{dp.name}")
+
+        # Keep app.state.partners in sync so GET /mirage/admin/partners reflects it
+        existing_names = {p.partner for p in request.app.state.partners}
+        if partner.partner not in existing_names:
+            request.app.state.partners.append(partner)
+        else:
+            request.app.state.partners = [
+                partner if p.partner == partner.partner else p
+                for p in request.app.state.partners
+            ]
+
+        payload_dp_names = {dp.name for dp in partner.datapoints if dp.pattern in _PAYLOAD_PATTERNS}
+        status_code = 201 if result.created else 200
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "status": "ok",
+                "partner": partner.partner,
+                "description": partner.description,
+                "directory": f"partners/{partner.partner}",
+                "file": f"partners/{partner.partner}/partner.yaml",
+                "created": result.created,
+                "datapoints": [
+                    {
+                        "name": dp.name,
+                        "pattern": dp.pattern,
+                        "endpoints": [{"method": ep.method, "path": ep.path} for ep in dp.endpoints],
+                        "admin_routes": dp.name in payload_dp_names,
+                    }
+                    for dp in partner.datapoints
+                ],
+                "routes_added": added,
+                "routes_conflicts": conflicts,
+            },
+        )
+
     async def postman_collection(request: Request) -> JSONResponse:
         return JSONResponse(build_postman_collection(request.app.state.partners))
 
     reload_partners.__name__ = "admin_reload_partners"
+    create_partner_handler.__name__ = "admin_create_partner"
 
     app.add_api_route("/mirage/admin/sessions", list_sessions, methods=["GET"])
     app.add_api_route("/mirage/admin/partners", list_partners, methods=["GET"])
+    app.add_api_route("/mirage/admin/partners", create_partner_handler, methods=["POST"])
     app.add_api_route("/mirage/admin/reload", reload_partners, methods=["POST"])
     app.add_api_route("/mirage/admin/postman", postman_collection, methods=["GET"])
     logger.debug("Registered infra routes")
