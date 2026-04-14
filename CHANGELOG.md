@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-04-14
+
+### Added
+
+- `POST /mirage/admin/partners` — register a new partner from a raw YAML body over HTTP; routes go live immediately without a server restart. Designed for containerised deployments where exec-ing into the pod is not practical.
+- `mirage/partners.py` — `register_partner()` shared core used by both `mirage generate` and the new HTTP endpoint, eliminating duplication.
+
+### Changed
+
+- `mirage generate` refactored to call `register_partner()` internally — behaviour is identical, no CLI changes.
+- `docs/` directory is now gitignored and excluded from the Docker image; design documents are kept locally only.
+
 ## [0.1.1] - 2026-04-13
 
 ### Added
