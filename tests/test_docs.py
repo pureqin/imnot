@@ -64,7 +64,7 @@ def test_docs_readme_content_type_is_plain_text(client):
 
 def test_docs_readme_contains_expected_content(client):
     resp = client.get("/imnot/docs")
-    assert "Mirage" in resp.text
+    assert "imnot" in resp.text
 
 
 def test_docs_readme_missing_returns_404(client_missing_files):

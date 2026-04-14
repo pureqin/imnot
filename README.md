@@ -1,4 +1,4 @@
-# Mirage
+# imnot
 
 <p align="center">
   <img src="assets/imnot-logo.png" alt="imnot" width="600"/>
@@ -6,17 +6,17 @@
 
 [![CI](https://github.com/edu2105/imnot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/edu2105/imnot/actions/workflows/ci.yml)
 
-Mirage is a stateful API mock server for integration testing.
+imnot is a stateful API mock server for integration testing.
 
 Define a partner's API as a YAML file, run `imnot start`, and you get a fully functional
 mock server — no code changes required to add new partners or endpoints.
 
-## Why Mirage?
+## Why imnot?
 
 Tools like WireMock, Postman, and Mockoon mock individual HTTP responses. Real partner APIs
 don't work that way: they require a specific call sequence, return `202 Accepted` before data
 is available, and expect you to poll or wait before fetching a result. Testing against a
-stateless stub hides these interaction bugs until you hit production. Mirage models the full
+stateless stub hides these interaction bugs until you hit production. imnot models the full
 interaction sequence — submit, poll, fetch — so your integration tests reflect what actually
 happens when your code talks to a real partner API.
 
@@ -30,7 +30,7 @@ happens when your code talks to a real partner API.
   - `static` — endpoint that always returns a fixed JSON body defined in the YAML.
   - `fetch` — synchronous GET that returns the stored payload for a datapoint, with optional session isolation.
   - `async` — flexible N-step async flow defined in YAML: submit → optional status check(s) → fetch result.
-  - `push` — Mirage proactively delivers a payload to a callback URL after receiving a submit request.
+  - `push` — imnot proactively delivers a payload to a callback URL after receiving a submit request.
 - **Payload storage** supports two modes:
   - *Global* — one payload per datapoint, last write wins.
   - *Session* — isolated payload per test run, selected via `X-Imnot-Session` header.
@@ -40,7 +40,7 @@ happens when your code talks to a real partner API.
 ### Interaction sequence (async pattern)
 
 ```
-Test Harness                       Mirage
+Test Harness                       imnot
      |                               |
      |  POST /admin/.../payload      |   (upload the response payload)
      |------------------------------>|
@@ -82,7 +82,7 @@ imnot start
 
 Expected output:
 ```
-Starting Mirage on http://127.0.0.1:8000
+Starting imnot on http://127.0.0.1:8000
 INFO:     Started server process [12345]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
@@ -233,7 +233,7 @@ configurable. Behavior is opt-in via two response flags:
 
 ### `push`
 
-Mirage receives a submit request, returns immediately, then fires an outbound HTTP call
+imnot receives a submit request, returns immediately, then fires an outbound HTTP call
 to a callback URL with the stored payload — simulating the partner calling back your
 webhook endpoint.
 
@@ -272,7 +272,7 @@ admin endpoint.
 **Interaction sequence:**
 
 ```
-Test Harness                    Mirage                    Test Harness Webhook
+Test Harness                    imnot                     Test Harness Webhook
      |                             |                               |
      |  POST /admin/.../payload    |                               |
      |---------------------------->|                               |
@@ -312,7 +312,7 @@ Multiple test users can run in parallel with isolated payloads — each gets the
 
 ## Admin endpoints
 
-For every `fetch`, `async`, or `push` datapoint, Mirage auto-generates payload endpoints:
+For every `fetch`, `async`, or `push` datapoint, imnot auto-generates payload endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -342,7 +342,7 @@ Use `?force=true` to overwrite an existing partner. Returns `201` on create, `20
 > **Note — ephemeral storage:** partners written at runtime are stored on the server's local
 > filesystem. In a containerised deployment (Docker, Kubernetes), they will be lost if the pod
 > restarts unless the partners directory is backed by a persistent volume. This is an
-> infrastructure concern — Mirage does not manage persistence.
+> infrastructure concern — imnot does not manage persistence.
 
 Docs endpoints (public, no auth required):
 
@@ -393,7 +393,7 @@ Set `IMNOT_ADMIN_KEY` in `docker-compose.yml` for Docker deployments.
 
 ## Docker
 
-Use Docker when you want to run Mirage as a persistent background service — for example,
+Use Docker when you want to run imnot as a persistent background service — for example,
 on a shared dev server, in CI, or alongside other containers. For local development,
 the local install above is simpler.
 
@@ -428,7 +428,7 @@ environment:
 
 The published Docker image (`ghcr.io/edu2105/imnot`) runs on any container platform.
 How you get that container running in your cloud is your domain — the specifics depend
-on your provider, infrastructure, and team setup. What Mirage does require, regardless
+on your provider, infrastructure, and team setup. What imnot does require, regardless
 of where it runs:
 
 - **Persistent storage** — mount a volume at `/app/data` so the SQLite database
@@ -464,7 +464,7 @@ and prints a summary of all consumer and admin endpoints.
 
 ### Over HTTP (containerised deployment)
 
-When Mirage runs as a pod or container, use `POST /imnot/admin/partners` to register a new
+When imnot runs as a pod or container, use `POST /imnot/admin/partners` to register a new
 partner without exec-ing into the container. The endpoint validates the YAML, writes it to
 the partners directory, and registers its routes immediately — no restart required.
 

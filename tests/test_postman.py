@@ -168,7 +168,7 @@ def test_get_endpoint_has_no_body(fetch_partner):
 def test_post_without_known_body_has_no_body(static_partner):
     col = build_postman_collection([static_partner])
     consumer = col["item"][0]["item"][0]["item"][0]
-    # static POST — Mirage doesn't know the consumer body shape
+    # static POST — imnot doesn't know the consumer body shape
     assert "body" not in consumer["request"]
 
 

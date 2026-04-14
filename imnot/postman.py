@@ -121,7 +121,7 @@ def _consumer_request(dp: DatapointDef, ep: EndpointDef) -> dict[str, Any]:
             headers.append({
                 "key": header_name,
                 "value": "http://your-service/webhook",
-                "description": "Callback URL — Mirage will POST the stored payload here",
+                "description": "Callback URL — imnot will POST the stored payload here",
             })
 
     # X-Imnot-Session — present but disabled for payload-pattern endpoints
@@ -145,7 +145,7 @@ def _consumer_request(dp: DatapointDef, ep: EndpointDef) -> dict[str, Any]:
 
 
 def _consumer_body(dp: DatapointDef, ep: EndpointDef) -> dict[str, Any] | None:
-    """Return a pre-filled body for consumer endpoints where Mirage knows the shape."""
+    """Return a pre-filled body for consumer endpoints where imnot knows the shape."""
     if dp.pattern == "push":
         field: str | None = ep.response.get("callback_url_field")
         if field:

@@ -37,7 +37,7 @@
     font-weight="700"
     letter-spacing="10"
     fill="url(#textGrad)"
-  >MIRAGE</text>
+  >IMNOT</text>
 
   <!-- Reflected wordmark — flipped vertically, wavy shimmer applied -->
   <g transform="translate(0, 124) scale(1, -1)" mask="url(#reflectionMask)">
@@ -50,9 +50,9 @@
       letter-spacing="10"
       fill="url(#reflectGrad)"
       filter="url(#shimmer)"
-    >MIRAGE</text>
+    >IMNOT</text>
   </g>
 
-  <!-- Thin divider line between text and reflection — the "ground" of the mirage -->
+  <!-- Thin divider line between text and reflection -->
   <line x1="32" y1="70" x2="288" y2="70" stroke="url(#textGrad)" stroke-width="0.75" stroke-opacity="0.4"/>
 </svg>

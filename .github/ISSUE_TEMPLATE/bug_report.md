@@ -26,7 +26,7 @@ labels: bug
 
 ## Environment
 
-- Mirage version:
+- imnot version:
 - Python version:
 - OS:
 - Installed via: `pip install` / Docker / source
