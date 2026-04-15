@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+  <defs>
+    <!-- Drop shadow for the nametag card -->
+    <filter id="card-shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="7"
+                    flood-color="#000000" flood-opacity="0.18"/>
+    </filter>
+
+    <!-- Subtle dot grid for the white body area -->
+    <pattern id="dotgrid" x="0" y="0" width="14" height="14"
+             patternUnits="userSpaceOnUse">
+      <circle cx="7" cy="7" r="0.9" fill="#C2C2C2"/>
+    </pattern>
+
+    <!-- Clip to the card's rounded boundary -->
+    <clipPath id="card-shape">
+      <rect x="22" y="18" width="356" height="264" rx="11" ry="11"/>
+    </clipPath>
+  </defs>
+
+  <!-- ── Card base (white, with drop shadow) ── -->
+  <rect x="22" y="18" width="356" height="264" rx="11" ry="11"
+        fill="white" filter="url(#card-shadow)"/>
+
+  <!-- ── Content clipped to rounded card shape ── -->
+  <g clip-path="url(#card-shape)">
+    <!-- Red header bar -->
+    <rect x="22" y="18" width="356" height="72" fill="#E63946"/>
+
+    <!-- Dot grid in white body -->
+    <rect x="22" y="90" width="356" height="192"
+          fill="url(#dotgrid)" opacity="0.55"/>
+  </g>
+
+  <!-- ── Card border (over clip group so corners stay crisp) ── -->
+  <rect x="22" y="18" width="356" height="264" rx="11" ry="11"
+        fill="none" stroke="#C8C8C8" stroke-width="1.5"/>
+
+  <!-- ── Header / body divider ── -->
+  <line x1="22" y1="90" x2="378" y2="90"
+        stroke="#D5D5D5" stroke-width="1"/>
+
+  <!-- ── Decorative pin holes (classic conference-badge detail) ── -->
+  <circle cx="60"  cy="44" r="5.5"
+          fill="rgba(0,0,0,0.12)" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+  <circle cx="340" cy="44" r="5.5"
+          fill="rgba(0,0,0,0.12)" stroke="rgba(255,255,255,0.5)" stroke-width="1.5"/>
+
+  <!-- ── "Hello, my name is" ── -->
+  <text x="200" y="62"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="20" font-style="italic"
+        fill="white" text-anchor="middle" letter-spacing="0.4">
+    Hello, I am
+  </text>
+
+  <!-- ── Partner name (muted, will be crossed out) ── -->
+  <!-- "Acme" = universally-understood fictional stand-in; not a real partner -->
+  <text x="200" y="163"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="50" font-weight="bold"
+        fill="#8A8A8A" text-anchor="middle">Acme</text>
+
+  <!-- ── Diagonal strikethrough over partner name ── -->
+  <line x1="112" y1="116" x2="288" y2="174"
+        stroke="#E63946" stroke-width="4.5" stroke-linecap="round"/>
+
+  <!-- ── "imnot" — primary visual focal point ── -->
+  <text x="200" y="248"
+        font-family="Arial, Helvetica, sans-serif"
+        font-size="64" font-weight="bold"
+        fill="#1A1A1A" text-anchor="middle" letter-spacing="-1">imnot</text>
+</svg>

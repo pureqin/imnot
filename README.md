@@ -1,7 +1,7 @@
 # imnot
 
 <p align="center">
-  <img src="assets/imnot-logo.png" alt="imnot" width="600"/>
+  <img src="assets/imnot-logo.svg" alt="imnot — stateful API mock server" width="400" height="300"/>
 </p>
 
 [![CI](https://github.com/edu2105/imnot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/edu2105/imnot/actions/workflows/ci.yml)
