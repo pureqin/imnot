@@ -13,26 +13,56 @@ mock server — no code changes required to add new partners or endpoints.
 
 ## Why imnot?
 
-Real APIs aren't a single endpoint. They have an OAuth token flow, an async submit that returns
-`202 Accepted`, a status check, a fetch step, and sometimes a webhook callback. Most mock servers
-handle the simple case well and leave you scripting everything else.
+- **YAML in, mock server out.** One file defines your partner's endpoints, patterns, and responses. No code, no JVM, no GUI.
+- **Stateful flows, not just fixed responses.** OAuth, async submit/poll/fetch, webhooks, and per-test session isolation — all modeled in YAML, not scripted.
+- **Lives next to your code.** The mock definition is version-controlled alongside the integration it tests and runs anywhere Docker runs.
 
-imnot models the full interaction from a single YAML file. Define your partner's endpoints and
-their pattern — `oauth`, `static`, `fetch`, `async`, or `push` — run `imnot start`, and you have
-a running mock with no code written. Upload a payload via the admin API and the next request
-returns it. Use session headers to isolate payloads per test run, safe for parallel CI execution.
+Reach for other tools when you need conditional responses based on request body content, or prefer a GUI-first workflow.
 
-The mock definition lives in your repo alongside the code that uses it, runs anywhere Docker runs,
-and reflects how the real API actually behaves — not just what it returns.
+## AI-ready
 
-**imnot is a good fit when:**
-- Your integration tests hit OAuth-secured or async third-party APIs
-- You want deterministic, stateful mocks in CI without external dependencies
-- You want the mock definition version-controlled alongside your code
+Don't want to write the YAML yourself? Paste one of these into Claude, ChatGPT, or your AI assistant:
 
-**Reach for other tools when:**
-- You need responses that vary based on request body content (JSONPath/XPath matching)
-- You prefer a GUI-first workflow
+**From a description:**
+```
+Generate an imnot partner YAML for [partner name].
+Schema reference: https://github.com/edu2105/imnot/blob/main/partners/README.md
+Endpoints I need to mock: [describe them]
+```
+
+**From an OpenAPI spec:**
+```
+Convert this OpenAPI spec to an imnot partner YAML.
+Schema: https://github.com/edu2105/imnot/blob/main/partners/README.md
+[paste your spec here]
+```
+
+## Quick start
+
+Requires Python 3.11 or later.
+
+```bash
+git clone https://github.com/edu2105/imnot.git
+cd imnot
+python3 -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e .
+imnot start
+```
+
+Expected output:
+```
+Starting imnot on http://127.0.0.1:8000
+INFO:     Started server process [12345]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+```
+
+See what endpoints are available (no server needed):
+```bash
+imnot routes
+```
 
 ## How it works
 
@@ -80,33 +110,6 @@ Test Harness                       imnot
 
 The number and shape of steps is configurable per partner — 2-step, 3-step, and
 body-delivered IDs are all supported. See the `async` pattern documentation below.
-
-## Quick start
-
-Requires Python 3.11 or later.
-
-```bash
-git clone https://github.com/edu2105/imnot.git
-cd imnot
-python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -e .
-imnot start
-```
-
-Expected output:
-```
-Starting imnot on http://127.0.0.1:8000
-INFO:     Started server process [12345]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
-```
-
-See what endpoints are available (no server needed):
-```bash
-imnot routes
-```
 
 ## Patterns
 
