@@ -8,12 +8,12 @@
 
 imnot is a stateful API mock server for integration testing.
 
-Define a partner's API as a YAML file, run `imnot start`, and you get a fully functional
-mock server — no code changes required to add new partners or endpoints.
+Define an external API as a YAML file, run `imnot start`, and you get a fully functional
+mock server — no code changes required to add new APIs or endpoints.
 
 ## Why imnot?
 
-- **YAML in, mock server out.** One file defines your partner's endpoints, patterns, and responses. No code, no JVM, no GUI.
+- **YAML in, mock server out.** One file defines an external API's endpoints, patterns, and responses. No code, no JVM, no GUI.
 - **Stateful flows, not just fixed responses.** OAuth, async submit/poll/fetch, webhooks, and per-test session isolation — all modeled in YAML, not scripted.
 - **Lives next to your code.** The mock definition is version-controlled alongside the integration it tests and runs anywhere Docker runs.
 
@@ -25,15 +25,19 @@ Don't want to write the YAML yourself? Paste one of these into Claude, ChatGPT, 
 
 **From a description:**
 ```
-Generate an imnot partner YAML for [partner name].
+I use imnot to mock external APIs for integration testing.
+Generate a partner.yaml file in imnot format for [service name].
 Schema reference: https://github.com/edu2105/imnot/blob/main/partners/README.md
-Endpoints I need to mock: [describe them]
+Endpoints to mock: [describe them]
+Output only the YAML — no code, no explanation.
 ```
 
 **From an OpenAPI spec:**
 ```
-Convert this OpenAPI spec to an imnot partner YAML.
+I use imnot to mock external APIs for integration testing.
+Convert this OpenAPI spec into a partner.yaml file in imnot format.
 Schema: https://github.com/edu2105/imnot/blob/main/partners/README.md
+Output only the YAML — no code, no explanation.
 [paste your spec here]
 ```
 
@@ -184,7 +188,7 @@ curl http://localhost:8000/bookingco/v1/charges
 
 ### `async`
 
-Flexible N-step async flow. Use for partners that submit work asynchronously and
+Flexible N-step async flow. Use for external APIs that submit work asynchronously and
 return the result via a separate endpoint. Step count and HTTP methods are fully
 configurable. Behavior is opt-in via two response flags:
 
@@ -251,7 +255,7 @@ configurable. Behavior is opt-in via two response flags:
 ### `push`
 
 imnot receives a submit request, returns immediately, then fires an outbound HTTP call
-to a callback URL with the stored payload — simulating the partner calling back your
+to a callback URL with the stored payload — simulating the external service calling back your
 webhook endpoint.
 
 **Callback URL from request body field:**
